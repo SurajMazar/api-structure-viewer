@@ -1,0 +1,5 @@
+{
+  "name": "API Doc Studio",
+  "description": "A high-performance API structure visualizer and documenter with LocalStorage persistence, Monaco editor for JSON responses, and full import/export capabilities.",
+  "requestFramePermissions": []
+}
