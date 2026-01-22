@@ -25,18 +25,18 @@ const INITIAL_COLLECTION: Collection = {
   items: [
     {
       id: 'fld_1',
-      name: 'User Management',
+      name: 'Existing Review Endpoints',
       description: 'Endpoints related to user profiles and settings.',
       type: 'folder',
       parentId: null
     },
     {
       id: 'req_1',
-      name: 'Get User Profile',
+      name: 'All data',
       description: 'Fetch detailed user data for the specified ID.',
       type: 'request',
       parentId: 'fld_1',
-      method: 'GET',
+      method: 'POST',
       url: 'https://api.example.com/v1/users/{{userId}}',
       params: [{ id: 'p1', key: 'fields', value: 'all', description: 'Filter fields', enabled: true }],
       headers: [{ id: 'h1', key: 'Authorization', value: 'Bearer {{token}}', description: 'Token', enabled: true }],
@@ -55,7 +55,7 @@ const App: React.FC = () => {
     return saved ? JSON.parse(saved) : INITIAL_COLLECTION;
   });
   const [activeItemId, setActiveItemId] = useState<string | null>(collection.items.find(i => i.type === 'request')?.id || null);
-  const [sidebarWidth, setSidebarWidth] = useState(() => Number(localStorage.getItem('api_sidebar_width')) || 260);
+  const [sidebarWidth, setSidebarWidth] = useState(() => Number(localStorage.getItem('api_sidebar_width')) || 300);
   const [responsePanelWidth, setResponsePanelWidth] = useState(() => Number(localStorage.getItem('api_response_width')) || 550);
   const [isResponsePanelOpen, setIsResponsePanelOpen] = useState(false);
   const [isResponseFullscreen, setIsResponseFullscreen] = useState(false);
@@ -88,7 +88,7 @@ const App: React.FC = () => {
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (isResizingSidebar.current) {
-        setSidebarWidth(Math.max(200, Math.min(600, e.clientX)));
+        setSidebarWidth(Math.max(200, Math.min(800, e.clientX)));
       } else if (isResizingResponse.current) {
         const newWidth = window.innerWidth - e.clientX;
         setResponsePanelWidth(Math.max(300, Math.min(window.innerWidth, newWidth)));
@@ -217,14 +217,14 @@ const App: React.FC = () => {
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-2">
-          <div className="flex items-center justify-between mb-3 px-2">
+        <div className="flex-1 overflow-auto custom-scrollbar p-2">
+          <div className="flex items-center justify-between mb-3 px-2 sticky left-0">
             <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-600">Explorer</span>
             <button onClick={() => addItem('folder')} className="text-primary-500 hover:text-primary-400 text-[10px] font-black uppercase flex items-center gap-1">
               <Icons.Plus className="size-3" /> Folder
             </button>
           </div>
-          <div className="space-y-0.5">
+          <div className="space-y-0.5 min-w-max pr-4">
             {collection.items.filter(i => i.parentId === null).map(item => (
               <SidebarItem 
                 key={item.id} 
@@ -239,7 +239,7 @@ const App: React.FC = () => {
             ))}
           </div>
         </div>
-        <div className="absolute right-0 top-0 w-1 h-full cursor-col-resize hover:bg-primary-500/20 transition-colors z-50"
+        <div className="absolute right-0 top-0 w-1 h-full cursor-col-resize hover:bg-primary-500 transition-colors z-50"
           onMouseDown={() => { isResizingSidebar.current = true; }} />
       </aside>
 
@@ -324,7 +324,7 @@ const App: React.FC = () => {
         </button>
       )}
 
-      {/* --- Response Panel Overlay - Direct Child of Root to prevent stacking context issues --- */}
+      {/* --- Response Panel Overlay --- */}
       <div 
         style={{ width: isResponsePanelOpen ? calculatedResponseWidth : 0 }}
         className={`fixed inset-y-0 right-0 bg-white dark:bg-surface-950 z-[150] border-l border-slate-200 dark:border-surface-800 shadow-2xl transform transition-all duration-300 ease-out overflow-visible ${isResponsePanelOpen ? 'translate-x-0' : 'translate-x-full'}`}
@@ -369,10 +369,13 @@ const SidebarItem: React.FC<{
         onDragOver={(e) => { if(item.type === 'folder') { e.preventDefault(); e.currentTarget.classList.add('bg-primary-500/5'); } }}
         onDragLeave={(e) => e.currentTarget.classList.remove('bg-primary-500/5')}
         onDrop={(e) => { if(item.type === 'folder') { e.preventDefault(); e.stopPropagation(); e.currentTarget.classList.remove('bg-primary-500/5'); const draggedId = e.dataTransfer.getData('text/plain'); if (draggedId) onMove(draggedId, item.id); setIsOpen(true); } }}
-        className={`flex items-center gap-2 px-3 py-2 rounded cursor-pointer transition-all duration-150 relative ${isActive ? 'bg-primary-600/15 dark:bg-primary-600/15 text-primary-600 dark:text-primary-400' : 'hover:bg-slate-200 dark:hover:bg-surface-800/40 text-slate-600 dark:text-slate-500'}`}
+        className={`flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer transition-all duration-150 relative mb-1 mx-1 ${isActive ? 'bg-primary-600/10 dark:bg-primary-600/15 text-primary-600 dark:text-primary-400' : 'hover:bg-slate-100 dark:hover:bg-surface-800/40 text-slate-600 dark:text-slate-500'}`}
         onClick={() => setActiveItemId(item.id)}
       >
-        <div className="flex items-center gap-2 flex-1 min-w-0">
+        {/* Active Indicator Line */}
+        {isActive && <div className="absolute left-1.5 top-2 bottom-2 w-1 bg-primary-600 rounded-full" />}
+        
+        <div className="flex items-center gap-3 flex-1">
           {item.type === 'folder' ? (
             <div 
               className="p-1 -ml-1 hover:bg-slate-300 dark:hover:bg-white/10 rounded-sm transition-colors cursor-pointer shrink-0 z-10"
@@ -380,25 +383,29 @@ const SidebarItem: React.FC<{
                 e.stopPropagation(); 
                 setIsOpen(!isOpen); 
               }}
-              title={isOpen ? "Collapse" : "Expand"}
             >
               <Icons.ChevronRight className={`size-3.5 shrink-0 transition-transform ${isOpen ? 'rotate-90' : ''}`} />
             </div>
           ) : (
-            <span className={`text-[10px] font-black w-8 shrink-0 text-center ${isActive ? 'text-primary-600 dark:text-primary-400' : METHOD_COLORS[item.method || 'GET']}`}>{item.method}</span>
+            <div className={`text-[9px] font-black w-10 shrink-0 text-center py-1 px-1.5 rounded bg-white dark:bg-surface-900 shadow-sm border border-slate-200 dark:border-surface-800 uppercase tracking-tighter ${isActive ? 'text-primary-600 dark:text-primary-400' : METHOD_COLORS[item.method || 'GET']}`}>
+              {item.method}
+            </div>
           )}
-          <span className={`text-[14px] font-medium truncate tracking-tight ${isActive ? 'text-slate-900 dark:text-slate-100' : ''}`}>{item.name}</span>
+          <span className={`text-[14px] font-semibold whitespace-nowrap ${isActive ? 'text-slate-900 dark:text-slate-100' : 'text-slate-700 dark:text-slate-400'}`}>
+            {item.name}
+          </span>
         </div>
-        <div className="flex items-center gap-1.5 shrink-0 opacity-0 group-hover/item:opacity-100 transition-opacity">
-          {item.type === 'folder' && <button onClick={(e) => { e.stopPropagation(); onAddChild('folder', item.id); }} className="p-0.5 hover:bg-slate-300 dark:hover:bg-white/10 rounded"><Icons.Folder className="size-3.5" /></button>}
-          {item.type === 'folder' && <button onClick={(e) => { e.stopPropagation(); onAddChild('request', item.id); }} className="p-0.5 hover:bg-slate-300 dark:hover:bg-white/10 rounded"><Icons.Plus className="size-3.5" /></button>}
-          <button onClick={(e) => { e.stopPropagation(); onDelete(item.id); }} className="p-0.5 hover:bg-red-500/20 rounded text-red-500/50"><Icons.Delete className="size-3.5" /></button>
+        
+        <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover/item:opacity-100 transition-opacity sticky right-0">
+          {item.type === 'folder' && <button onClick={(e) => { e.stopPropagation(); onAddChild('folder', item.id); }} className="p-1 hover:bg-slate-300 dark:hover:bg-white/10 rounded"><Icons.Folder className="size-3.5" /></button>}
+          {item.type === 'folder' && <button onClick={(e) => { e.stopPropagation(); onAddChild('request', item.id); }} className="p-1 hover:bg-slate-300 dark:hover:bg-white/10 rounded"><Icons.Plus className="size-3.5" /></button>}
+          <button onClick={(e) => { e.stopPropagation(); onDelete(item.id); }} className="p-1 hover:bg-red-500/20 rounded text-red-500/50"><Icons.Delete className="size-3.5" /></button>
         </div>
       </div>
       {item.type === 'folder' && isOpen && (
-        <div className="ml-4 pl-1 border-l border-slate-200 dark:border-surface-800/50 mt-px space-y-0.5">
+        <div className="ml-5 pl-1 border-l border-slate-200 dark:border-surface-800/50 mt-px space-y-0.5">
           {children.map(child => <SidebarItem key={child.id} item={child} collection={collection} activeItemId={activeItemId} setActiveItemId={setActiveItemId} onAddChild={onAddChild} onDelete={onDelete} onMove={onMove} />)}
-          {children.length === 0 && <div className="text-[11px] text-slate-400 dark:text-slate-700 py-1.5 pl-6 uppercase tracking-tighter">Empty</div>}
+          {children.length === 0 && <div className="text-[10px] text-slate-400 dark:text-slate-700 py-2 pl-8 uppercase tracking-widest font-bold opacity-50">No content</div>}
         </div>
       )}
     </div>
