@@ -25,8 +25,8 @@ const INITIAL_COLLECTION: Collection = {
   items: [
     {
       id: 'fld_1',
-      name: 'Existing Review Endpoints',
-      description: 'Endpoints related to user profiles and settings.',
+      name: 'Existing Review screen-api',
+      description: 'Endpoints related to review flows.',
       type: 'folder',
       parentId: null
     },
@@ -155,12 +155,23 @@ const App: React.FC = () => {
     if (activeItemId === id) setActiveItemId(null);
   };
 
-  const moveItem = (itemId: string, newParentId: string | null) => {
+  const moveItem = (itemId: string, newParentId: string | null, targetIndex?: number) => {
     if (itemId === newParentId) return;
-    setCollection(prev => ({
-      ...prev,
-      items: prev.items.map(item => item.id === itemId ? { ...item, parentId: newParentId } : item)
-    }));
+    setCollection(prev => {
+      const items = [...prev.items];
+      const itemIndex = items.findIndex(i => i.id === itemId);
+      if (itemIndex === -1) return prev;
+
+      const [item] = items.splice(itemIndex, 1);
+      item.parentId = newParentId;
+
+      if (targetIndex !== undefined) {
+        items.splice(targetIndex, 0, item);
+      } else {
+        items.push(item);
+      }
+      return { ...prev, items };
+    });
   };
 
   const exportData = () => {
@@ -196,7 +207,7 @@ const App: React.FC = () => {
 
       {/* --- Sidebar --- */}
       <aside style={{ width: sidebarWidth }} className="border-r border-slate-200 dark:border-surface-800 bg-slate-50 dark:bg-surface-950 flex flex-col shrink-0 relative transition-none z-30">
-        <header className="p-4 border-b border-slate-200 dark:border-surface-800 space-y-3 bg-slate-50 dark:bg-surface-950">
+        <header className="p-4 border-b border-slate-200 dark:border-surface-800 space-y-3 bg-slate-50 dark:bg-surface-950 shrink-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5 min-w-0">
               <div className="size-8 bg-primary-600 rounded flex items-center justify-center text-white font-black text-lg">D</div>
@@ -217,26 +228,29 @@ const App: React.FC = () => {
           </div>
         </header>
 
-        <div className="flex-1 overflow-auto custom-scrollbar p-2">
-          <div className="flex items-center justify-between mb-3 px-2 sticky left-0">
+        <div className="flex-1 overflow-x-auto overflow-y-auto custom-scrollbar p-2">
+          <div className="flex items-center justify-between mb-3 px-2 sticky left-0 z-20">
             <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-600">Explorer</span>
             <button onClick={() => addItem('folder')} className="text-primary-500 hover:text-primary-400 text-[10px] font-black uppercase flex items-center gap-1">
               <Icons.Plus className="size-3" /> Folder
             </button>
           </div>
-          <div className="space-y-0.5 min-w-max pr-4">
-            {collection.items.filter(i => i.parentId === null).map(item => (
-              <SidebarItem 
-                key={item.id} 
-                item={item} 
-                collection={collection}
-                activeItemId={activeItemId} 
-                setActiveItemId={setActiveItemId}
-                onAddChild={(type, pId) => addItem(type, pId)}
-                onDelete={deleteItem}
-                onMove={moveItem}
-              />
-            ))}
+          <div className="space-y-0.5 min-w-max pb-32">
+            {collection.items
+              .filter(i => i.parentId === null)
+              .sort((a, b) => (a.type === b.type ? 0 : a.type === 'folder' ? -1 : 1))
+              .map(item => (
+                <SidebarItem 
+                  key={item.id} 
+                  item={item} 
+                  collection={collection}
+                  activeItemId={activeItemId} 
+                  setActiveItemId={setActiveItemId}
+                  onAddChild={(type, pId) => addItem(type, pId)}
+                  onDelete={deleteItem}
+                  onMove={moveItem}
+                />
+              ))}
           </div>
         </div>
         <div className="absolute right-0 top-0 w-1 h-full cursor-col-resize hover:bg-primary-500 transition-colors z-50"
@@ -356,26 +370,79 @@ const App: React.FC = () => {
 
 const SidebarItem: React.FC<{ 
   item: ApiItem, collection: Collection, activeItemId: string | null, setActiveItemId: (id: string) => void,
-  onAddChild: (type: 'folder' | 'request', parentId: string) => void, onDelete: (id: string) => void, onMove: (itemId: string, newParentId: string | null) => void
+  onAddChild: (type: 'folder' | 'request', parentId: string) => void, onDelete: (id: string) => void, onMove: (itemId: string, newParentId: string | null, targetIndex?: number) => void
 }> = ({ item, collection, activeItemId, setActiveItemId, onAddChild, onDelete, onMove }) => {
   const [isOpen, setIsOpen] = useState(true);
+  const [dragOverPos, setDragOverPos] = useState<'top' | 'middle' | 'bottom' | null>(null);
   const isActive = activeItemId === item.id;
-  const children = collection.items.filter(c => c.parentId === item.id);
+  
+  const children = collection.items
+    .filter(c => c.parentId === item.id)
+    .sort((a, b) => (a.type === b.type ? 0 : a.type === 'folder' ? -1 : 1));
+  
+  const itemIndex = collection.items.findIndex(i => i.id === item.id);
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const rect = e.currentTarget.getBoundingClientRect();
+    const y = e.clientY - rect.top;
+    
+    if (item.type === 'folder') {
+      if (y < rect.height * 0.25) setDragOverPos('top');
+      else if (y > rect.height * 0.75) setDragOverPos('bottom');
+      else setDragOverPos('middle');
+    } else {
+      if (y < rect.height * 0.5) setDragOverPos('top');
+      else setDragOverPos('bottom');
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const draggedId = e.dataTransfer.getData('text/plain');
+    if (!draggedId || draggedId === item.id) {
+      setDragOverPos(null);
+      return;
+    }
+
+    if (dragOverPos === 'middle' && item.type === 'folder') {
+      onMove(draggedId, item.id);
+      setIsOpen(true);
+    } else if (dragOverPos === 'top') {
+      onMove(draggedId, item.parentId, itemIndex);
+    } else if (dragOverPos === 'bottom') {
+      onMove(draggedId, item.parentId, itemIndex + 1);
+    }
+    
+    setDragOverPos(null);
+  };
 
   return (
-    <div className="group/item">
+    <div className="group/item relative">
       <div 
-        draggable onDragStart={(e) => { e.dataTransfer.setData('text/plain', item.id); e.stopPropagation(); }}
-        onDragOver={(e) => { if(item.type === 'folder') { e.preventDefault(); e.currentTarget.classList.add('bg-primary-500/5'); } }}
-        onDragLeave={(e) => e.currentTarget.classList.remove('bg-primary-500/5')}
-        onDrop={(e) => { if(item.type === 'folder') { e.preventDefault(); e.stopPropagation(); e.currentTarget.classList.remove('bg-primary-500/5'); const draggedId = e.dataTransfer.getData('text/plain'); if (draggedId) onMove(draggedId, item.id); setIsOpen(true); } }}
-        className={`flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer transition-all duration-150 relative mb-1 mx-1 ${isActive ? 'bg-primary-600/10 dark:bg-primary-600/15 text-primary-600 dark:text-primary-400' : 'hover:bg-slate-100 dark:hover:bg-surface-800/40 text-slate-600 dark:text-slate-500'}`}
+        draggable 
+        onDragStart={(e) => { e.dataTransfer.setData('text/plain', item.id); e.stopPropagation(); }}
+        onDragOver={handleDragOver}
+        onDragLeave={() => setDragOverPos(null)}
+        onDrop={handleDrop}
+        className={`flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer transition-all duration-150 relative mb-1 mx-1 
+          ${isActive ? 'bg-primary-600/10 dark:bg-primary-600/15 text-primary-600 dark:text-primary-400' : 'hover:bg-slate-100 dark:hover:bg-surface-800/40 text-slate-600 dark:text-slate-500'}
+          ${dragOverPos === 'middle' && item.type === 'folder' ? 'bg-primary-500/10 ring-1 ring-primary-500/30' : ''}
+          min-w-max flex-nowrap
+        `}
         onClick={() => setActiveItemId(item.id)}
       >
-        {/* Active Indicator Line */}
-        {isActive && <div className="absolute left-1.5 top-2 bottom-2 w-1 bg-primary-600 rounded-full" />}
+        {/* Drop Indicators */}
+        {dragOverPos === 'top' && <div className="absolute top-0 left-1 right-1 h-0.5 bg-primary-500 rounded-full z-50" />}
+        {dragOverPos === 'bottom' && <div className="absolute bottom-0 left-1 right-1 h-0.5 bg-primary-500 rounded-full z-50" />}
         
-        <div className="flex items-center gap-3 flex-1">
+        {/* Active Indicator Line */}
+        {isActive && <div className="absolute left-1.5 top-2.5 bottom-2.5 w-1 bg-primary-600 rounded-full" />}
+        
+        <div className="flex items-center gap-3 min-w-0 pr-4">
           {item.type === 'folder' ? (
             <div 
               className="p-1 -ml-1 hover:bg-slate-300 dark:hover:bg-white/10 rounded-sm transition-colors cursor-pointer shrink-0 z-10"
@@ -391,21 +458,22 @@ const SidebarItem: React.FC<{
               {item.method}
             </div>
           )}
-          <span className={`text-[14px] font-semibold whitespace-nowrap ${isActive ? 'text-slate-900 dark:text-slate-100' : 'text-slate-700 dark:text-slate-400'}`}>
+          <span className={`text-[14px] font-semibold whitespace-nowrap overflow-visible ${isActive ? 'text-slate-900 dark:text-slate-100' : 'text-slate-700 dark:text-slate-400'}`}>
             {item.name}
           </span>
         </div>
         
-        <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover/item:opacity-100 transition-opacity sticky right-0">
-          {item.type === 'folder' && <button onClick={(e) => { e.stopPropagation(); onAddChild('folder', item.id); }} className="p-1 hover:bg-slate-300 dark:hover:bg-white/10 rounded"><Icons.Folder className="size-3.5" /></button>}
-          {item.type === 'folder' && <button onClick={(e) => { e.stopPropagation(); onAddChild('request', item.id); }} className="p-1 hover:bg-slate-300 dark:hover:bg-white/10 rounded"><Icons.Plus className="size-3.5" /></button>}
-          <button onClick={(e) => { e.stopPropagation(); onDelete(item.id); }} className="p-1 hover:bg-red-500/20 rounded text-red-500/50"><Icons.Delete className="size-3.5" /></button>
+        {/* Action Buttons (RELATIVE POSITIONED) */}
+        <div className={`flex items-center gap-1 shrink-0 opacity-0 group-hover/item:opacity-100 transition-opacity px-1.5 py-1 rounded-md shadow-sm border border-slate-200 dark:border-surface-700 ml-auto bg-slate-100 dark:bg-surface-800`}>
+          {item.type === 'folder' && <button onClick={(e) => { e.stopPropagation(); onAddChild('folder', item.id); }} className="p-1 hover:bg-slate-200 dark:hover:bg-white/10 rounded transition-colors text-slate-500 dark:text-slate-400" title="New Folder"><Icons.Folder className="size-3.5" /></button>}
+          {item.type === 'folder' && <button onClick={(e) => { e.stopPropagation(); onAddChild('request', item.id); }} className="p-1 hover:bg-slate-200 dark:hover:bg-white/10 rounded transition-colors text-slate-500 dark:text-slate-400" title="New Request"><Icons.Plus className="size-3.5" /></button>}
+          <button onClick={(e) => { e.stopPropagation(); onDelete(item.id); }} className="p-1 hover:bg-red-500/10 rounded transition-colors text-red-500/60 hover:text-red-500" title="Delete"><Icons.Delete className="size-3.5" /></button>
         </div>
       </div>
       {item.type === 'folder' && isOpen && (
         <div className="ml-5 pl-1 border-l border-slate-200 dark:border-surface-800/50 mt-px space-y-0.5">
           {children.map(child => <SidebarItem key={child.id} item={child} collection={collection} activeItemId={activeItemId} setActiveItemId={setActiveItemId} onAddChild={onAddChild} onDelete={onDelete} onMove={onMove} />)}
-          {children.length === 0 && <div className="text-[10px] text-slate-400 dark:text-slate-700 py-2 pl-8 uppercase tracking-widest font-bold opacity-50">No content</div>}
+          {children.length === 0 && <div className="text-[10px] text-slate-400 dark:text-slate-700 py-2 pl-8 uppercase tracking-widest font-bold opacity-50 whitespace-nowrap">No content</div>}
         </div>
       )}
     </div>
@@ -424,7 +492,7 @@ const WorkspaceHeader: React.FC<{ item: ApiItem, collection: Collection, onUpdat
         <span>Collection</span>
         {pathSegments.map((p, i) => <React.Fragment key={i}><Icons.ChevronRight className="size-3 opacity-30" /><span className="max-w-[150px] truncate">{p}</span></React.Fragment>)}
       </div>
-      <input className="w-full bg-transparent border-none p-0 text-4xl font-black text-slate-900 dark:text-white focus:ring-0 placeholder-slate-200 dark:placeholder-slate-900" value={item.name} onChange={(e) => onUpdate(item.id, { name: e.target.value })} placeholder="Endpoint Name" />
+      <input className="w-full bg-transparent border-none p-0 text-4xl font-black text-slate-900 dark:text-white focus:ring-0 placeholder-slate-200 dark:placeholder-slate-900 outline-none" value={item.name} onChange={(e) => onUpdate(item.id, { name: e.target.value })} placeholder="Endpoint Name" />
       <div className="h-0.5 w-16 bg-primary-600 rounded-full" />
     </div>
   );
@@ -446,7 +514,7 @@ const RequestDetails: React.FC<{ item: ApiItem, onUpdate: (id: string, updates: 
         </select>
         <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 dark:text-slate-500"><Icons.ChevronRight className="size-3.5 rotate-90" /></div>
       </div>
-      <input className="flex-1 bg-transparent border-none text-[15px] font-mono text-slate-800 dark:text-slate-300 px-6 focus:ring-0 placeholder-slate-300 dark:placeholder-slate-800" value={item.url || ''} onChange={(e) => onUpdate(item.id, { url: e.target.value })} placeholder="https://api.example.com/v1/..." />
+      <input className="flex-1 bg-transparent border-none text-[15px] font-mono text-slate-800 dark:text-slate-300 px-6 focus:ring-0 placeholder-slate-300 dark:placeholder-slate-800 outline-none" value={item.url || ''} onChange={(e) => onUpdate(item.id, { url: e.target.value })} placeholder="https://api.example.com/v1/..." />
     </div>
   </div>
 );
@@ -473,9 +541,9 @@ const ParamTable: React.FC<{ title?: string, items: ParamItem[], onChange: (item
             {items.map(item => (
               <tr key={item.id} className="group hover:bg-slate-50 dark:hover:bg-white/[0.01]">
                 <td className="px-5 py-4 text-center"><input type="checkbox" checked={item.enabled} onChange={(e) => updateRow(item.id, { enabled: e.target.checked })} className="size-4 bg-white dark:bg-surface-950 border-slate-300 dark:border-surface-700 rounded text-primary-600 focus:ring-0" /></td>
-                <td className="px-5 py-4 font-mono"><input className="w-full bg-transparent border-none p-0 text-slate-800 dark:text-slate-300 focus:ring-0 placeholder-slate-300 dark:placeholder-slate-800" value={item.key} onChange={(e) => updateRow(item.id, { key: e.target.value })} placeholder="field_name" /></td>
-                <td className="px-5 py-4 font-mono"><input className="w-full bg-transparent border-none p-0 text-emerald-600 dark:text-emerald-500/80 focus:ring-0 placeholder-slate-300 dark:placeholder-slate-800" value={item.value} onChange={(e) => updateRow(item.id, { value: e.target.value })} placeholder="example_value" /></td>
-                <td className="px-5 py-4"><input className="w-full bg-transparent border-none p-0 text-slate-500 italic focus:ring-0 placeholder-slate-300 dark:placeholder-slate-800" value={item.description} onChange={(e) => updateRow(item.id, { description: e.target.value })} placeholder="Add a note..." /></td>
+                <td className="px-5 py-4 font-mono"><input className="w-full bg-transparent border-none p-0 text-slate-800 dark:text-slate-300 focus:ring-0 placeholder-slate-300 dark:placeholder-slate-800 outline-none" value={item.key} onChange={(e) => updateRow(item.id, { key: e.target.value })} placeholder="field_name" /></td>
+                <td className="px-5 py-4 font-mono"><input className="w-full bg-transparent border-none p-0 text-emerald-600 dark:text-emerald-500/80 focus:ring-0 placeholder-slate-300 dark:placeholder-slate-800 outline-none" value={item.value} onChange={(e) => updateRow(item.id, { value: e.target.value })} placeholder="example_value" /></td>
+                <td className="px-5 py-4"><input className="w-full bg-transparent border-none p-0 text-slate-500 italic focus:ring-0 placeholder-slate-300 dark:placeholder-slate-800 outline-none" value={item.description} onChange={(e) => updateRow(item.id, { description: e.target.value })} placeholder="Add a note..." /></td>
                 <td className="px-5 py-4 text-center"><button onClick={() => removeRow(item.id)} className="text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"><Icons.Delete className="size-4" /></button></td>
               </tr>
             ))}
@@ -524,7 +592,6 @@ const RequestBody: React.FC<{ item: ApiItem, onUpdate: (id: string, updates: Par
               fontFamily: 'JetBrains Mono', 
               padding: { top: 16, bottom: 16 }, 
               automaticLayout: true, 
-              backgroundColor: theme === 'dark' ? '#01040a' : '#f8fafc', 
               scrollBeyondLastLine: false, 
               stickyScroll: { enabled: false } 
             }}
@@ -635,7 +702,6 @@ const ResponseOverlay: React.FC<{
                   padding: { top: 16, bottom: 16 }, 
                   wordWrap: 'off',
                   scrollBeyondLastLine: false,
-                  backgroundColor: theme === 'dark' ? '#01040a' : '#f8fafc', 
                   lineHeight: 20,
                   stickyScroll: { enabled: false },
                   folding: true,
