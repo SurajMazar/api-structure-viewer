@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Editor } from '@monaco-editor/react';
 import { ApiItem, Collection, HttpMethod, ParamItem, ResponseMock, BodyType } from './types';
@@ -433,7 +432,7 @@ const ParamTable: React.FC<{ title?: string, items: ParamItem[], onChange: (item
   );
 };
 
-const RequestBody: React.FC<{ item: ApiItem, onUpdate: (id: string, updates: Partial<ApiItem>), theme: 'light' | 'dark' }> = ({ item, onUpdate, theme }) => {
+const RequestBody: React.FC<{ item: ApiItem, onUpdate: (id: string, updates: Partial<ApiItem>) => void, theme: 'light' | 'dark' }> = ({ item, onUpdate, theme }) => {
   const types: { label: string, value: BodyType }[] = [
     { label: 'None', value: 'none' },
     { label: 'JSON', value: 'json' },
@@ -488,7 +487,7 @@ const RequestBody: React.FC<{ item: ApiItem, onUpdate: (id: string, updates: Par
   );
 };
 
-const ResponseOverlay: React.FC<{ item: ApiItem, onClose: () => void, onUpdate: (id: string, updates: Partial<ApiItem>), theme: 'light' | 'dark' }> = ({ item, onClose, onUpdate, theme }) => {
+const ResponseOverlay: React.FC<{ item: ApiItem, onClose: () => void, onUpdate: (id: string, updates: Partial<ApiItem>) => void, theme: 'light' | 'dark' }> = ({ item, onClose, onUpdate, theme }) => {
   const activeMock = item.mocks?.find(m => m.id === item.activeMockId) || item.mocks?.[0];
   const addMock = () => { const newMock: ResponseMock = { id: `m_${Date.now()}`, name: 'New Case', status: 200, body: '{\n  "success": true\n}' }; onUpdate(item.id, { mocks: [...(item.mocks || []), newMock], activeMockId: newMock.id }); };
   const updateActiveMock = (updates: Partial<ResponseMock>) => { if (!activeMock) return; onUpdate(item.id, { mocks: item.mocks?.map(m => m.id === activeMock.id ? { ...m, ...updates } : m) }); };
