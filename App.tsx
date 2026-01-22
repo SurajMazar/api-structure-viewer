@@ -42,7 +42,7 @@ const INITIAL_COLLECTION: Collection = {
       headers: [{ id: 'h1', key: 'Authorization', value: 'Bearer {{token}}', description: 'Token', enabled: true }],
       bodyType: 'none',
       mocks: [
-        { id: 'm1', name: 'Success', status: 200, body: '{\n  "status": "success",\n  "data": { "id": 1 }\n}' }
+        { id: 'm1', name: 'Success', status: 200, body: '{\n  "status": "success",\n  "data": {\n    "id": 1,\n    "username": "jdoe",\n    "documents": [\n      {\n        "id": "doc_1",\n        "pages": [\n          {\n            "number": 1,\n            "content": "..."\n          }\n        ]\n      }\n    ]\n  }\n}' }
       ],
       activeMockId: 'm1'
     }
@@ -55,8 +55,10 @@ const App: React.FC = () => {
     return saved ? JSON.parse(saved) : INITIAL_COLLECTION;
   });
   const [activeItemId, setActiveItemId] = useState<string | null>(collection.items.find(i => i.type === 'request')?.id || null);
-  const [sidebarWidth, setSidebarWidth] = useState(260);
+  const [sidebarWidth, setSidebarWidth] = useState(() => Number(localStorage.getItem('api_sidebar_width')) || 260);
+  const [responsePanelWidth, setResponsePanelWidth] = useState(() => Number(localStorage.getItem('api_response_width')) || 550);
   const [isResponsePanelOpen, setIsResponsePanelOpen] = useState(false);
+  const [isResponseFullscreen, setIsResponseFullscreen] = useState(false);
   const [activeTab, setActiveTab] = useState<'params' | 'headers' | 'body'>('params');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -71,24 +73,31 @@ const App: React.FC = () => {
     }
   }, [collection, theme]);
 
-  const toggleTheme = () => {
-    setCollection(prev => ({
-      ...prev,
-      theme: prev.theme === 'light' ? 'dark' : 'light'
-    }));
-  };
+  useEffect(() => {
+    localStorage.setItem('api_sidebar_width', sidebarWidth.toString());
+  }, [sidebarWidth]);
+
+  useEffect(() => {
+    localStorage.setItem('api_response_width', responsePanelWidth.toString());
+  }, [responsePanelWidth]);
 
   const activeItem = collection.items.find(item => item.id === activeItemId);
   const isResizingSidebar = useRef(false);
+  const isResizingResponse = useRef(false);
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (isResizingSidebar.current) {
-        setSidebarWidth(Math.max(200, Math.min(500, e.clientX)));
+        setSidebarWidth(Math.max(200, Math.min(600, e.clientX)));
+      } else if (isResizingResponse.current) {
+        const newWidth = window.innerWidth - e.clientX;
+        setResponsePanelWidth(Math.max(300, Math.min(window.innerWidth, newWidth)));
+        if (isResponseFullscreen) setIsResponseFullscreen(false);
       }
     };
     const handleMouseUp = () => {
       isResizingSidebar.current = false;
+      isResizingResponse.current = false;
       document.body.style.cursor = 'default';
     };
     window.addEventListener('mousemove', handleMouseMove);
@@ -97,7 +106,14 @@ const App: React.FC = () => {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, []);
+  }, [isResponseFullscreen]);
+
+  const toggleTheme = () => {
+    setCollection(prev => ({
+      ...prev,
+      theme: prev.theme === 'light' ? 'dark' : 'light'
+    }));
+  };
 
   const updateItem = useCallback((id: string, updates: Partial<ApiItem>) => {
     setCollection(prev => ({
@@ -172,6 +188,8 @@ const App: React.FC = () => {
     reader.readAsText(file);
   };
 
+  const calculatedResponseWidth = isResponseFullscreen ? '100vw' : `${responsePanelWidth}px`;
+
   return (
     <div className="flex h-screen w-full overflow-hidden text-slate-800 dark:text-slate-300 select-none bg-white dark:bg-surface-950 font-sans text-[14px]">
       <input type="file" ref={fileInputRef} onChange={importData} className="hidden" accept=".json" />
@@ -226,84 +244,66 @@ const App: React.FC = () => {
       </aside>
 
       {/* --- Main Workspace --- */}
-      <main className="flex-1 flex flex-col min-w-0 bg-white dark:bg-[#0a0f1c] relative z-10 overflow-hidden">
+      <main className="flex-1 flex flex-col min-w-0 bg-white dark:bg-[#0a0f1c] relative overflow-hidden">
         {activeItem ? (
-          <>
-            <div className="flex-1 overflow-y-auto custom-scrollbar">
-              <div className="max-w-4xl mx-auto p-8 md:p-12 space-y-8">
-                <WorkspaceHeader item={activeItem} collection={collection} onUpdate={updateItem} />
-                
-                <section>
-                  <SectionTitle title="Description" />
-                  <textarea 
-                    className="w-full bg-slate-50 dark:bg-surface-900/50 border-slate-200 dark:border-surface-800 rounded text-[14px] text-slate-800 dark:text-slate-300 focus:ring-1 focus:ring-primary-500/40 focus:border-primary-500/40 placeholder-slate-400 dark:placeholder-slate-700 min-h-[70px] p-4 shadow-sm border outline-none resize-none transition-all"
-                    value={activeItem.description}
-                    onChange={(e) => updateItem(activeItem.id, { description: e.target.value })}
-                    placeholder="Describe this endpoint..."
-                  />
-                </section>
+          <div className="flex-1 overflow-y-auto custom-scrollbar">
+            <div className="max-w-4xl mx-auto p-8 md:p-12 space-y-8">
+              <WorkspaceHeader item={activeItem} collection={collection} onUpdate={updateItem} />
+              
+              <section>
+                <SectionTitle title="Description" />
+                <textarea 
+                  className="w-full bg-slate-50 dark:bg-surface-900/50 border-slate-200 dark:border-surface-800 rounded text-[14px] text-slate-800 dark:text-slate-300 focus:ring-1 focus:ring-primary-500/40 focus:border-primary-500/40 placeholder-slate-400 dark:placeholder-slate-700 min-h-[70px] p-4 shadow-sm border outline-none resize-none transition-all"
+                  value={activeItem.description}
+                  onChange={(e) => updateItem(activeItem.id, { description: e.target.value })}
+                  placeholder="Describe this endpoint..."
+                />
+              </section>
 
-                {activeItem.type === 'request' && (
-                  <div className="space-y-6">
-                    <RequestDetails item={activeItem} onUpdate={updateItem} />
-                    
-                    {/* Tabs Control */}
-                    <div className="border-b border-slate-200 dark:border-surface-800/60 flex items-center gap-8 px-2">
-                      <button 
-                        onClick={() => setActiveTab('params')}
-                        className={`pb-3 text-[12px] font-black uppercase tracking-widest transition-all relative ${activeTab === 'params' ? 'text-primary-600 dark:text-primary-400' : 'text-slate-400 dark:text-slate-600 hover:text-slate-600 dark:hover:text-slate-400'}`}
-                      >
-                        Params
-                        {activeTab === 'params' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-primary-500 rounded-full" />}
-                      </button>
-                      <button 
-                        onClick={() => setActiveTab('headers')}
-                        className={`pb-3 text-[12px] font-black uppercase tracking-widest transition-all relative ${activeTab === 'headers' ? 'text-primary-600 dark:text-primary-400' : 'text-slate-400 dark:text-slate-600 hover:text-slate-600 dark:hover:text-slate-400'}`}
-                      >
-                        Headers
-                        {activeTab === 'headers' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-primary-500 rounded-full" />}
-                      </button>
-                      <button 
-                        onClick={() => setActiveTab('body')}
-                        className={`pb-3 text-[12px] font-black uppercase tracking-widest transition-all relative ${activeTab === 'body' ? 'text-primary-600 dark:text-primary-400' : 'text-slate-400 dark:text-slate-600 hover:text-slate-600 dark:hover:text-slate-400'}`}
-                      >
-                        Body
-                        {activeTab === 'body' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-primary-500 rounded-full" />}
-                      </button>
-                    </div>
-
-                    {/* Tab Panels */}
-                    <div className="min-h-[300px]">
-                      {activeTab === 'params' && (
-                        <ParamTable title="" items={activeItem.params || []} onChange={(params) => updateItem(activeItem.id, { params })} />
-                      )}
-                      {activeTab === 'headers' && (
-                        <ParamTable title="" items={activeItem.headers || []} onChange={(headers) => updateItem(activeItem.id, { headers })} />
-                      )}
-                      {activeTab === 'body' && (
-                        <RequestBody item={activeItem} onUpdate={updateItem} theme={theme} />
-                      )}
-                    </div>
+              {activeItem.type === 'request' && (
+                <div className="space-y-6">
+                  <RequestDetails item={activeItem} onUpdate={updateItem} />
+                  
+                  <div className="border-b border-slate-200 dark:border-surface-800/60 flex items-center gap-8 px-2">
+                    <button 
+                      onClick={() => setActiveTab('params')}
+                      className={`pb-3 text-[12px] font-black uppercase tracking-widest transition-all relative ${activeTab === 'params' ? 'text-primary-600 dark:text-primary-400' : 'text-slate-400 dark:text-slate-600 hover:text-slate-600 dark:hover:text-slate-400'}`}
+                    >
+                      Params
+                      {activeTab === 'params' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-primary-500 rounded-full" />}
+                    </button>
+                    <button 
+                      onClick={() => setActiveTab('headers')}
+                      className={`pb-3 text-[12px] font-black uppercase tracking-widest transition-all relative ${activeTab === 'headers' ? 'text-primary-600 dark:text-primary-400' : 'text-slate-400 dark:text-slate-600 hover:text-slate-600 dark:hover:text-slate-400'}`}
+                    >
+                      Headers
+                      {activeTab === 'headers' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-primary-500 rounded-full" />}
+                    </button>
+                    <button 
+                      onClick={() => setActiveTab('body')}
+                      className={`pb-3 text-[12px] font-black uppercase tracking-widest transition-all relative ${activeTab === 'body' ? 'text-primary-600 dark:text-primary-400' : 'text-slate-400 dark:text-slate-600 hover:text-slate-600 dark:hover:text-slate-400'}`}
+                    >
+                      Body
+                      {activeTab === 'body' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-primary-500 rounded-full" />}
+                    </button>
                   </div>
-                )}
-                <div className="h-24" />
-              </div>
-            </div>
 
-            <button 
-              onClick={() => setIsResponsePanelOpen(true)}
-              className="fixed bottom-6 right-6 z-[100] bg-primary-600 hover:bg-primary-500 text-white px-5 py-2.5 rounded shadow-lg flex items-center gap-2.5 font-bold text-[11px] uppercase tracking-widest transition-all border border-white/10 active:scale-95"
-            >
-              <Icons.FileCode className="size-4" />
-              <span>Responses</span>
-              <span className="bg-white/20 px-2 py-0.5 rounded text-[11px] min-w-[18px] text-center font-black">{activeItem.mocks?.length || 0}</span>
-            </button>
-
-            <div className={`fixed inset-y-0 right-0 w-[550px] max-w-[85vw] bg-white dark:bg-surface-950 z-[110] border-l border-slate-200 dark:border-surface-800 shadow-2xl transform transition-transform duration-300 ease-out ${isResponsePanelOpen ? 'translate-x-0' : 'translate-x-full'}`}>
-              <ResponseOverlay item={activeItem} onClose={() => setIsResponsePanelOpen(false)} onUpdate={updateItem} theme={theme} />
+                  <div className="min-h-[300px]">
+                    {activeTab === 'params' && (
+                      <ParamTable title="" items={activeItem.params || []} onChange={(params) => updateItem(activeItem.id, { params })} />
+                    )}
+                    {activeTab === 'headers' && (
+                      <ParamTable title="" items={activeItem.headers || []} onChange={(headers) => updateItem(activeItem.id, { headers })} />
+                    )}
+                    {activeTab === 'body' && (
+                      <RequestBody item={activeItem} onUpdate={updateItem} theme={theme} />
+                    )}
+                  </div>
+                </div>
+              )}
+              <div className="h-24" />
             </div>
-            {isResponsePanelOpen && <div className="fixed inset-0 bg-black/40 dark:bg-black/60 z-[105]" onClick={() => setIsResponsePanelOpen(false)} />}
-          </>
+          </div>
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center opacity-30">
             <Icons.FileCode className="size-12 mb-4" />
@@ -311,6 +311,45 @@ const App: React.FC = () => {
           </div>
         )}
       </main>
+
+      {/* --- Response Trigger Button --- */}
+      {activeItem && (
+        <button 
+          onClick={() => setIsResponsePanelOpen(true)}
+          className="fixed bottom-6 right-6 z-[100] bg-primary-600 hover:bg-primary-500 text-white px-5 py-2.5 rounded shadow-lg flex items-center gap-2.5 font-bold text-[11px] uppercase tracking-widest transition-all border border-white/10 active:scale-95"
+        >
+          <Icons.FileCode className="size-4" />
+          <span>Responses</span>
+          <span className="bg-white/20 px-2 py-0.5 rounded text-[11px] min-w-[18px] text-center font-black">{activeItem.mocks?.length || 0}</span>
+        </button>
+      )}
+
+      {/* --- Response Panel Overlay - Direct Child of Root to prevent stacking context issues --- */}
+      <div 
+        style={{ width: isResponsePanelOpen ? calculatedResponseWidth : 0 }}
+        className={`fixed inset-y-0 right-0 bg-white dark:bg-surface-950 z-[150] border-l border-slate-200 dark:border-surface-800 shadow-2xl transform transition-all duration-300 ease-out overflow-visible ${isResponsePanelOpen ? 'translate-x-0' : 'translate-x-full'}`}
+      >
+        {isResponsePanelOpen && !isResponseFullscreen && (
+          <div 
+            className="absolute -left-1 top-0 w-2 h-full cursor-col-resize hover:bg-primary-500 transition-colors z-[160]"
+            onMouseDown={(e) => { e.preventDefault(); isResizingResponse.current = true; document.body.style.cursor = 'col-resize'; }}
+          />
+        )}
+        
+        <div className={`h-full w-full ${isResponsePanelOpen ? 'opacity-100' : 'opacity-0'} transition-opacity duration-200`}>
+          {activeItem && (
+            <ResponseOverlay 
+              item={activeItem} 
+              isFullscreen={isResponseFullscreen}
+              onToggleFullscreen={() => setIsResponseFullscreen(!isResponseFullscreen)}
+              onClose={() => { setIsResponsePanelOpen(false); setIsResponseFullscreen(false); }} 
+              onUpdate={updateItem} 
+              theme={theme} 
+            />
+          )}
+        </div>
+      </div>
+      {isResponsePanelOpen && <div className="fixed inset-0 bg-black/40 dark:bg-black/60 z-[140]" onClick={() => setIsResponsePanelOpen(false)} />}
     </div>
   );
 };
@@ -331,10 +370,23 @@ const SidebarItem: React.FC<{
         onDragLeave={(e) => e.currentTarget.classList.remove('bg-primary-500/5')}
         onDrop={(e) => { if(item.type === 'folder') { e.preventDefault(); e.stopPropagation(); e.currentTarget.classList.remove('bg-primary-500/5'); const draggedId = e.dataTransfer.getData('text/plain'); if (draggedId) onMove(draggedId, item.id); setIsOpen(true); } }}
         className={`flex items-center gap-2 px-3 py-2 rounded cursor-pointer transition-all duration-150 relative ${isActive ? 'bg-primary-600/15 dark:bg-primary-600/15 text-primary-600 dark:text-primary-400' : 'hover:bg-slate-200 dark:hover:bg-surface-800/40 text-slate-600 dark:text-slate-500'}`}
-        onClick={() => { setActiveItemId(item.id); if (item.type === 'folder') setIsOpen(!isOpen); }}
+        onClick={() => setActiveItemId(item.id)}
       >
         <div className="flex items-center gap-2 flex-1 min-w-0">
-          {item.type === 'folder' ? <Icons.ChevronRight className={`size-3.5 shrink-0 transition-transform ${isOpen ? 'rotate-90' : ''}`} /> : <span className={`text-[10px] font-black w-8 shrink-0 text-center ${isActive ? 'text-primary-600 dark:text-primary-400' : METHOD_COLORS[item.method || 'GET']}`}>{item.method}</span>}
+          {item.type === 'folder' ? (
+            <div 
+              className="p-1 -ml-1 hover:bg-slate-300 dark:hover:bg-white/10 rounded-sm transition-colors cursor-pointer shrink-0 z-10"
+              onClick={(e) => { 
+                e.stopPropagation(); 
+                setIsOpen(!isOpen); 
+              }}
+              title={isOpen ? "Collapse" : "Expand"}
+            >
+              <Icons.ChevronRight className={`size-3.5 shrink-0 transition-transform ${isOpen ? 'rotate-90' : ''}`} />
+            </div>
+          ) : (
+            <span className={`text-[10px] font-black w-8 shrink-0 text-center ${isActive ? 'text-primary-600 dark:text-primary-400' : METHOD_COLORS[item.method || 'GET']}`}>{item.method}</span>
+          )}
           <span className={`text-[14px] font-medium truncate tracking-tight ${isActive ? 'text-slate-900 dark:text-slate-100' : ''}`}>{item.name}</span>
         </div>
         <div className="flex items-center gap-1.5 shrink-0 opacity-0 group-hover/item:opacity-100 transition-opacity">
@@ -387,7 +439,7 @@ const RequestDetails: React.FC<{ item: ApiItem, onUpdate: (id: string, updates: 
         </select>
         <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 dark:text-slate-500"><Icons.ChevronRight className="size-3.5 rotate-90" /></div>
       </div>
-      <input className="flex-1 bg-transparent border-none text-[15px] font-mono text-slate-800 dark:text-slate-300 px-6 focus:ring-0 placeholder-slate-300 dark:placeholder-slate-800" value={item.url} onChange={(e) => onUpdate(item.id, { url: e.target.value })} placeholder="https://api.example.com/v1/..." />
+      <input className="flex-1 bg-transparent border-none text-[15px] font-mono text-slate-800 dark:text-slate-300 px-6 focus:ring-0 placeholder-slate-300 dark:placeholder-slate-800" value={item.url || ''} onChange={(e) => onUpdate(item.id, { url: e.target.value })} placeholder="https://api.example.com/v1/..." />
     </div>
   </div>
 );
@@ -459,7 +511,16 @@ const RequestBody: React.FC<{ item: ApiItem, onUpdate: (id: string, updates: Par
           <Editor 
             height="100%" defaultLanguage="json" theme={theme === 'dark' ? "vs-dark" : "vs-light"} value={item.bodyJson || ''} 
             onChange={(v) => onUpdate(item.id, { bodyJson: v })}
-            options={{ minimap: { enabled: false }, fontSize: 14, fontFamily: 'JetBrains Mono', padding: { top: 16, bottom: 16 }, automaticLayout: true, backgroundColor: theme === 'dark' ? '#01040a' : '#f8fafc' }}
+            options={{ 
+              minimap: { enabled: false }, 
+              fontSize: 14, 
+              fontFamily: 'JetBrains Mono', 
+              padding: { top: 16, bottom: 16 }, 
+              automaticLayout: true, 
+              backgroundColor: theme === 'dark' ? '#01040a' : '#f8fafc', 
+              scrollBeyondLastLine: false, 
+              stickyScroll: { enabled: false } 
+            }}
           />
         </div>
       )}
@@ -467,7 +528,7 @@ const RequestBody: React.FC<{ item: ApiItem, onUpdate: (id: string, updates: Par
       {item.bodyType === 'raw' && (
         <textarea 
           className="w-full bg-slate-50 dark:bg-[#01040a] border-slate-200 dark:border-surface-800 rounded text-[14px] font-mono text-slate-800 dark:text-slate-300 focus:ring-1 focus:ring-primary-500/30 focus:border-primary-500/40 min-h-[220px] p-5 border outline-none resize-none transition-all shadow-inner"
-          value={item.bodyRaw}
+          value={item.bodyRaw || ''}
           onChange={(e) => onUpdate(item.id, { bodyRaw: e.target.value })}
           placeholder="Enter raw request body content..."
         />
@@ -487,7 +548,14 @@ const RequestBody: React.FC<{ item: ApiItem, onUpdate: (id: string, updates: Par
   );
 };
 
-const ResponseOverlay: React.FC<{ item: ApiItem, onClose: () => void, onUpdate: (id: string, updates: Partial<ApiItem>) => void, theme: 'light' | 'dark' }> = ({ item, onClose, onUpdate, theme }) => {
+const ResponseOverlay: React.FC<{ 
+  item: ApiItem, 
+  isFullscreen: boolean,
+  onToggleFullscreen: () => void,
+  onClose: () => void, 
+  onUpdate: (id: string, updates: Partial<ApiItem>) => void, 
+  theme: 'light' | 'dark' 
+}> = ({ item, isFullscreen, onToggleFullscreen, onClose, onUpdate, theme }) => {
   const activeMock = item.mocks?.find(m => m.id === item.activeMockId) || item.mocks?.[0];
   const addMock = () => { const newMock: ResponseMock = { id: `m_${Date.now()}`, name: 'New Case', status: 200, body: '{\n  "success": true\n}' }; onUpdate(item.id, { mocks: [...(item.mocks || []), newMock], activeMockId: newMock.id }); };
   const updateActiveMock = (updates: Partial<ResponseMock>) => { if (!activeMock) return; onUpdate(item.id, { mocks: item.mocks?.map(m => m.id === activeMock.id ? { ...m, ...updates } : m) }); };
@@ -496,8 +564,25 @@ const ResponseOverlay: React.FC<{ item: ApiItem, onClose: () => void, onUpdate: 
   return (
     <div className="flex flex-col h-full overflow-hidden bg-white dark:bg-surface-950">
       <header className="p-4 border-b border-slate-200 dark:border-surface-800 flex items-center justify-between shrink-0 bg-white/80 dark:bg-surface-950/80 backdrop-blur-md">
-        <div><h2 className="text-[15px] font-black text-slate-900 dark:text-white uppercase tracking-tighter">Mock Responses</h2><p className="text-[9px] text-slate-400 dark:text-slate-600 font-bold uppercase tracking-widest">Documented Output Scenarios</p></div>
-        <button onClick={onClose} className="p-1.5 hover:bg-slate-100 dark:hover:bg-surface-800 rounded text-slate-500 hover:text-slate-900 dark:hover:text-white transition-all"><Icons.Delete className="size-5" /></button>
+        <div className="flex items-center gap-4">
+          <div><h2 className="text-[15px] font-black text-slate-900 dark:text-white uppercase tracking-tighter">Mock Responses</h2><p className="text-[9px] text-slate-400 dark:text-slate-600 font-bold uppercase tracking-widest">Documented Output Scenarios</p></div>
+        </div>
+        <div className="flex items-center gap-1">
+          <button 
+            onClick={onToggleFullscreen} 
+            title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
+            className="p-1.5 hover:bg-slate-100 dark:hover:bg-surface-800 rounded text-slate-500 hover:text-slate-900 dark:hover:text-white transition-all"
+          >
+            <svg className="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              {isFullscreen ? (
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              ) : (
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+              )}
+            </svg>
+          </button>
+          <button onClick={onClose} className="p-1.5 hover:bg-slate-100 dark:hover:bg-surface-800 rounded text-slate-500 hover:text-slate-900 dark:hover:text-white transition-all"><Icons.Delete className="size-5" /></button>
+        </div>
       </header>
       <div className="flex-1 flex overflow-hidden">
         <div className="w-44 border-r border-slate-200 dark:border-surface-800 p-2 space-y-2 overflow-y-auto custom-scrollbar shrink-0 bg-slate-50 dark:bg-surface-950/40">
@@ -531,11 +616,31 @@ const ResponseOverlay: React.FC<{ item: ApiItem, onClose: () => void, onUpdate: 
                 </div>
               </div>
             </div>
-            <div className="flex-1">
+            <div className="flex-1 relative">
               <Editor 
                 height="100%" defaultLanguage="json" theme={theme === 'dark' ? "vs-dark" : "vs-light"} value={activeMock.body} 
                 onChange={(val) => updateActiveMock({ body: val || '' })} 
-                options={{ minimap: { enabled: false }, fontSize: 14, fontFamily: 'JetBrains Mono', automaticLayout: true, padding: { top: 16, bottom: 16 }, wordWrap: 'on', backgroundColor: theme === 'dark' ? '#01040a' : '#f8fafc', lineHeight: 20 }} 
+                options={{ 
+                  minimap: { enabled: false }, 
+                  fontSize: 14, 
+                  fontFamily: 'JetBrains Mono', 
+                  automaticLayout: true, 
+                  padding: { top: 16, bottom: 16 }, 
+                  wordWrap: 'off',
+                  scrollBeyondLastLine: false,
+                  backgroundColor: theme === 'dark' ? '#01040a' : '#f8fafc', 
+                  lineHeight: 20,
+                  stickyScroll: { enabled: false },
+                  folding: true,
+                  renderLineHighlight: 'all',
+                  scrollbar: {
+                    vertical: 'visible',
+                    horizontal: 'visible',
+                    useShadows: false,
+                    verticalScrollbarSize: 8,
+                    horizontalScrollbarSize: 8,
+                  }
+                }} 
               />
             </div>
           </div>
