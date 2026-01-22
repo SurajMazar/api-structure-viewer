@@ -80,15 +80,17 @@
 <script type="importmap">
 {
   "imports": {
-    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-    "react/": "https://esm.sh/react@^19.2.3/",
-    "react": "https://esm.sh/react@^19.2.3",
-    "@monaco-editor/react": "https://esm.sh/@monaco-editor/react@^4.7.0"
+    "react": "https://esm.sh/react@19.0.0",
+    "react/": "https://esm.sh/react@19.0.0/",
+    "react-dom": "https://esm.sh/react-dom@19.0.0",
+    "react-dom/": "https://esm.sh/react-dom@19.0.0/",
+    "@monaco-editor/react": "https://esm.sh/@monaco-editor/react@4.6.0?external=react"
   }
 }
 </script>
 </head>
 <body class="text-slate-800 dark:text-slate-200 antialiased overflow-hidden h-screen transition-colors duration-200">
     <div id="root"></div>
+    <script type="module" src="index.tsx"></script>
 </body>
 </html>
