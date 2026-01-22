@@ -1,6 +1,6 @@
 
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -51,6 +51,9 @@
     <style>
         body {
             font-family: 'Inter', sans-serif;
+            background-color: #ffffff;
+        }
+        .dark body {
             background-color: #0f172a;
         }
         .custom-scrollbar::-webkit-scrollbar {
@@ -61,10 +64,16 @@
             background: transparent;
         }
         .custom-scrollbar::-webkit-scrollbar-thumb {
-            background: #334155;
+            background: #cbd5e1;
             border-radius: 4px;
         }
+        .dark .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #334155;
+        }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+        .dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
             background: #475569;
         }
     </style>
@@ -79,7 +88,7 @@
 }
 </script>
 </head>
-<body class="text-slate-200 antialiased overflow-hidden h-screen">
+<body class="text-slate-800 dark:text-slate-200 antialiased overflow-hidden h-screen transition-colors duration-200">
     <div id="root"></div>
 </body>
 </html>
