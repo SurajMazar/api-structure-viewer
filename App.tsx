@@ -201,6 +201,14 @@ const App: React.FC = () => {
 
   const calculatedResponseWidth = isResponseFullscreen ? '100vw' : `${responsePanelWidth}px`;
 
+  // Filter root items and sort Folders first
+  const rootItems = collection.items
+    .filter(i => i.parentId === null)
+    .sort((a, b) => {
+      if (a.type !== b.type) return a.type === 'folder' ? -1 : 1;
+      return 0;
+    });
+
   return (
     <div className="flex h-screen w-full overflow-hidden text-slate-800 dark:text-slate-300 select-none bg-white dark:bg-surface-950 font-sans text-[14px]">
       <input type="file" ref={fileInputRef} onChange={importData} className="hidden" accept=".json" />
@@ -236,21 +244,18 @@ const App: React.FC = () => {
             </button>
           </div>
           <div className="space-y-0.5 min-w-max pb-32">
-            {collection.items
-              .filter(i => i.parentId === null)
-              .sort((a, b) => (a.type === b.type ? 0 : a.type === 'folder' ? -1 : 1))
-              .map(item => (
-                <SidebarItem 
-                  key={item.id} 
-                  item={item} 
-                  collection={collection}
-                  activeItemId={activeItemId} 
-                  setActiveItemId={setActiveItemId}
-                  onAddChild={(type, pId) => addItem(type, pId)}
-                  onDelete={deleteItem}
-                  onMove={moveItem}
-                />
-              ))}
+            {rootItems.map(item => (
+              <SidebarItem 
+                key={item.id} 
+                item={item} 
+                collection={collection}
+                activeItemId={activeItemId} 
+                setActiveItemId={setActiveItemId}
+                onAddChild={(type, pId) => addItem(type, pId)}
+                onDelete={deleteItem}
+                onMove={moveItem}
+              />
+            ))}
           </div>
         </div>
         <div className="absolute right-0 top-0 w-1 h-full cursor-col-resize hover:bg-primary-500 transition-colors z-50"
@@ -376,9 +381,13 @@ const SidebarItem: React.FC<{
   const [dragOverPos, setDragOverPos] = useState<'top' | 'middle' | 'bottom' | null>(null);
   const isActive = activeItemId === item.id;
   
+  // Sort Folders first in children
   const children = collection.items
     .filter(c => c.parentId === item.id)
-    .sort((a, b) => (a.type === b.type ? 0 : a.type === 'folder' ? -1 : 1));
+    .sort((a, b) => {
+      if (a.type !== b.type) return a.type === 'folder' ? -1 : 1;
+      return 0;
+    });
   
   const itemIndex = collection.items.findIndex(i => i.id === item.id);
 
@@ -428,8 +437,8 @@ const SidebarItem: React.FC<{
         onDragOver={handleDragOver}
         onDragLeave={() => setDragOverPos(null)}
         onDrop={handleDrop}
-        className={`flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer transition-all duration-150 relative mb-1 mx-1 
-          ${isActive ? 'bg-primary-600/10 dark:bg-primary-600/15 text-primary-600 dark:text-primary-400' : 'hover:bg-slate-100 dark:hover:bg-surface-800/40 text-slate-600 dark:text-slate-500'}
+        className={`flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition-all duration-150 relative mb-1 mx-1 
+          ${isActive ? 'bg-primary-600/10 dark:bg-primary-600/15' : 'hover:bg-slate-100 dark:hover:bg-surface-800/40 text-slate-600 dark:text-slate-500'}
           ${dragOverPos === 'middle' && item.type === 'folder' ? 'bg-primary-500/10 ring-1 ring-primary-500/30' : ''}
           min-w-max flex-nowrap
         `}
@@ -439,8 +448,8 @@ const SidebarItem: React.FC<{
         {dragOverPos === 'top' && <div className="absolute top-0 left-1 right-1 h-0.5 bg-primary-500 rounded-full z-50" />}
         {dragOverPos === 'bottom' && <div className="absolute bottom-0 left-1 right-1 h-0.5 bg-primary-500 rounded-full z-50" />}
         
-        {/* Active Indicator Line */}
-        {isActive && <div className="absolute left-1.5 top-2.5 bottom-2.5 w-1 bg-primary-600 rounded-full" />}
+        {/* Active Indicator Bar - Matches screenshot thickness and rounded look */}
+        {isActive && <div className="absolute left-0 top-1.5 bottom-1.5 w-1 bg-primary-600 rounded-r-full shadow-sm shadow-primary-500/50" />}
         
         <div className="flex items-center gap-3 min-w-0 pr-4">
           {item.type === 'folder' ? (
@@ -454,17 +463,17 @@ const SidebarItem: React.FC<{
               <Icons.ChevronRight className={`size-3.5 shrink-0 transition-transform ${isOpen ? 'rotate-90' : ''}`} />
             </div>
           ) : (
-            <div className={`text-[9px] font-black w-10 shrink-0 text-center py-1 px-1.5 rounded bg-white dark:bg-surface-900 shadow-sm border border-slate-200 dark:border-surface-800 uppercase tracking-tighter ${isActive ? 'text-primary-600 dark:text-primary-400' : METHOD_COLORS[item.method || 'GET']}`}>
+            <div className={`text-[9px] font-black w-12 shrink-0 text-center py-1 px-1 rounded bg-white dark:bg-surface-900 shadow-sm border border-slate-200 dark:border-surface-800 uppercase tracking-tighter ${METHOD_COLORS[item.method || 'GET']}`}>
               {item.method}
             </div>
           )}
-          <span className={`text-[14px] font-semibold whitespace-nowrap overflow-visible ${isActive ? 'text-slate-900 dark:text-slate-100' : 'text-slate-700 dark:text-slate-400'}`}>
+          <span className={`text-[14px] font-bold whitespace-nowrap overflow-visible ${isActive ? 'text-slate-900 dark:text-slate-100' : 'text-slate-700 dark:text-slate-400'}`}>
             {item.name}
           </span>
         </div>
         
-        {/* Action Buttons (RELATIVE POSITIONED) */}
-        <div className={`flex items-center gap-1 shrink-0 opacity-0 group-hover/item:opacity-100 transition-opacity px-1.5 py-1 rounded-md shadow-sm border border-slate-200 dark:border-surface-700 ml-auto bg-slate-100 dark:bg-surface-800`}>
+        {/* Action Buttons - Relative in Flex layout to maintain consistency */}
+        <div className={`flex items-center gap-1 shrink-0 opacity-0 group-hover/item:opacity-100 transition-opacity px-1.5 py-1 rounded-md shadow-sm border border-slate-200 dark:border-surface-700 ml-4 bg-white dark:bg-surface-800`}>
           {item.type === 'folder' && <button onClick={(e) => { e.stopPropagation(); onAddChild('folder', item.id); }} className="p-1 hover:bg-slate-200 dark:hover:bg-white/10 rounded transition-colors text-slate-500 dark:text-slate-400" title="New Folder"><Icons.Folder className="size-3.5" /></button>}
           {item.type === 'folder' && <button onClick={(e) => { e.stopPropagation(); onAddChild('request', item.id); }} className="p-1 hover:bg-slate-200 dark:hover:bg-white/10 rounded transition-colors text-slate-500 dark:text-slate-400" title="New Request"><Icons.Plus className="size-3.5" /></button>}
           <button onClick={(e) => { e.stopPropagation(); onDelete(item.id); }} className="p-1 hover:bg-red-500/10 rounded transition-colors text-red-500/60 hover:text-red-500" title="Delete"><Icons.Delete className="size-3.5" /></button>
@@ -473,7 +482,7 @@ const SidebarItem: React.FC<{
       {item.type === 'folder' && isOpen && (
         <div className="ml-5 pl-1 border-l border-slate-200 dark:border-surface-800/50 mt-px space-y-0.5">
           {children.map(child => <SidebarItem key={child.id} item={child} collection={collection} activeItemId={activeItemId} setActiveItemId={setActiveItemId} onAddChild={onAddChild} onDelete={onDelete} onMove={onMove} />)}
-          {children.length === 0 && <div className="text-[10px] text-slate-400 dark:text-slate-700 py-2 pl-8 uppercase tracking-widest font-bold opacity-50 whitespace-nowrap">No content</div>}
+          {children.length === 0 && <div className="text-[10px] text-slate-400 dark:text-slate-700 py-2 pl-8 uppercase tracking-widest font-bold opacity-50 whitespace-nowrap">Empty Folder</div>}
         </div>
       )}
     </div>
